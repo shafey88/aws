@@ -1,0 +1,57 @@
+---
+  - name: Provision an EC2 Instance
+    hosts: localhost
+    connection: local
+    gather_facts: False
+    tags: provisioning
+
+    vars:
+      instance_type: t2.micro
+      security_group: EC2Webgroup
+      image: ami-026c8acd92718196b
+      region: us-east-1
+      count: 2
+
+    tasks:
+
+      - name: Create new keypair
+        ec2_key:
+          name: my_key_aws
+          region: us-east-1
+        register: keypair
+
+      - name: Save private key
+        copy: content="{{ keypair.key.private_key }}" dest="./my_key_aws.pem" mode=0400
+        when: keypair.changed
+
+
+
+      - name: Create security group
+        local_action:
+          module: ec2_group
+          name: "{{ security_group }}"
+          description: Security Group for Newly Created EC2 Instance
+          region: "{{ region }}"
+          rules:
+            - proto: tcp
+              from_port: 22
+              to_port: 22
+              cidr_ip: 0.0.0.0/0
+
+
+      - name: Create EC2 Instance with nginx
+        local_action:
+                      module: ec2
+                      group: "{{ security_group }}"
+                      instance_type: "{{ instance_type}}"
+                      user_data:
+                                |
+                                #!/bin/bash 
+                                sudo apt-get install nginx -y
+                      image: "{{ image }}"
+                      wait: true
+                      region: "{{ region }}"
+                      keypair: my_key_aws
+                      count: "{{count}}"
+
+        register: ec2
